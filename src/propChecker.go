@@ -9,17 +9,23 @@ import (
 	"log"
 	"os"
 	"io/ioutil"
+	"strings"
 )
 
 const SRVRS_FILE string = "/home/aorfanos/projects/gommander/src/propchecker/server.list"
 
-type DnsLgApiResponse struct {
-	Name string `json:"name"`
-	Type string `json: "type"`
-	Class string `json: "class"`
-	Ttl int64 `json: "ttl"`
-	Rdlength int64 `json: "rdlength"`
-	Rdata string `json: "rdata"`
+type DnsLgApiIntResponse struct {
+	Name	string	`json:"name"`
+	Type	string	`json:"type"`
+	Class	string	`json:"class"`
+	Ttl	int64	`json:"ttl"`
+	Rdlength	int64	`json:"rdlength"`
+	Rdata	string	`json:"rdata"`
+}
+
+type DnsLgApiExtResponse struct {
+	Question	string	`json:"question"`
+	Answer		string	`json:"answer"`
 }
 
 func main() {
@@ -37,13 +43,28 @@ func main() {
 	serverPool, e := readLines(*poolF)
 	errChck(e)
 
-	fmt.Printf("Server\tStatus\t\n")
+	fmt.Printf("Server\tIPs\t\n")
 
 	for server := range serverPool {
 		go func(msg string) {
 			fmt.Printf("%s\t%s\n", serverPool[server], msg)
-		}(makeRequest(*domainF, serverPool[server], *recordF))
+		}(parseResponse(makeRequest(*domainF, serverPool[server], *recordF)))
 	}
+}
+
+func altParse(request string) (string) {
+	d := DnsLgApiExtResponse{}
+	e := json.NewDecoder(strings.NewReader(request)).Decode(&d)
+	errChck(e)
+
+	return d.Answer.Name
+}
+
+func parseResponse(response string) (string){
+	data := DnsLgApiExtResponse{}
+	errChck(json.Unmarshal([]byte(response), &data))
+
+	return data
 }
 
 func readLines(path string) ([]string, error) {
@@ -58,15 +79,6 @@ func readLines(path string) ([]string, error) {
 	}
 	return lines, scanner.Err()
 
-}
-
-func parseResponse(body []byte) (*DnsLgApiResponse, error) {
-	var s = new(DnsLgApiResponse)
-	err := json.Unmarshal(body, &s)
-	if ( err != nil) {
-		fmt.Println(err)
-	}
-	return s, err
 }
 
 func makeRequest(domain, server, reqType string) (string) {
